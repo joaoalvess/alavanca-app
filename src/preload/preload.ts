@@ -68,6 +68,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteOptimization: (id: number) =>
     ipcRenderer.invoke('history:delete-optimization', id),
 
+  // ATS Scores
+  getDistinctJobTitles: () =>
+    ipcRenderer.invoke('history:get-distinct-job-titles'),
+  getAtsScores: (targetRole: string) =>
+    ipcRenderer.invoke('history:get-ats-scores', targetRole),
+  computeAtsScore: (resumeId: number, targetRole: string) =>
+    ipcRenderer.invoke('history:compute-ats-score', resumeId, targetRole),
+  deleteAtsScores: (resumeId: number) =>
+    ipcRenderer.invoke('history:delete-ats-scores', resumeId),
+
+  // LinkedIn Scores
+  computeLinkedInScore: (resumeId: number, targetRole: string) =>
+    ipcRenderer.invoke('history:compute-linkedin-score', resumeId, targetRole),
+  getLinkedInScores: (targetRole: string) =>
+    ipcRenderer.invoke('history:get-linkedin-scores', targetRole),
+  deleteLinkedInScores: (resumeId: number) =>
+    ipcRenderer.invoke('history:delete-linkedin-scores', resumeId),
+
   // Export
   exportPdf: (resume: unknown) =>
     ipcRenderer.invoke('history:export-pdf', resume),
@@ -77,4 +95,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Scraping
   scrapeJobUrl: (url: string) =>
     ipcRenderer.invoke('history:scrape-job-url', url),
+
+  // LinkedIn
+  importLinkedInProfile: (url: string) =>
+    ipcRenderer.invoke('history:import-linkedin-profile', url),
 });
