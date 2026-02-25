@@ -5,13 +5,14 @@ import {
   Sparkles,
   History,
   Settings,
+  User,
   FileText,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: Home },
-  { to: '/resumes', label: 'Curriculos', icon: FileText },
+  { to: '/resumes', label: 'Meu Perfil', icon: User },
   { to: '/optimize', label: 'Otimizar', icon: Sparkles },
   { to: '/history', label: 'Historico', icon: History },
   { to: '/settings', label: 'Configuracoes', icon: Settings },

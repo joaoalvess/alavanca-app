@@ -1,21 +1,21 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  FileText,
-  Upload,
-  Trash2,
-  Sparkles,
-  Loader2,
-  Inbox,
-  ChevronDown,
-  Target,
-  Lightbulb,
-  Star,
-  Link,
-} from 'lucide-react';
+import { Loader2, Sparkles } from 'lucide-react';
 import { useElectronAPI } from '../hooks/useElectronAPI';
 import { useAppStore } from '../stores/app-store';
+import { ProfileHeader } from '../components/resumes/ProfileHeader';
+import { ScorePanel } from '../components/resumes/ScorePanel';
+import { DataSourcesCard } from '../components/resumes/DataSourcesCard';
+import { EmptyProfileState } from '../components/resumes/EmptyProfileState';
 import type { ResumeRecord, StructuredResume, AtsScore, LinkedInScore } from '../types';
+
+const noop = () => { /* no-op */ };
+
+function getCurrentRole(structured: StructuredResume): string | null {
+  const exp = structured.experience[0];
+  if (!exp) return null;
+  return `${exp.title}${exp.company ? ` @ ${exp.company}` : ''}`;
+}
 
 export function ResumesPage() {
   const api = useElectronAPI();
@@ -26,27 +26,66 @@ export function ResumesPage() {
   const [resumes, setResumes] = useState<ResumeRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // LinkedIn import state
-  const [linkedinUrl, setLinkedinUrl] = useState('');
-  const [importingLinkedin, setImportingLinkedin] = useState(false);
-
-  // ATS Score state
+  // Scoring state
   const [targetRole, setTargetRole] = useState('');
   const [jobTitles, setJobTitles] = useState<string[]>([]);
-  const [atsScores, setAtsScores] = useState<Map<number, AtsScore>>(new Map());
-  const [linkedInScores, setLinkedInScores] = useState<Map<number, LinkedInScore>>(new Map());
-  const [scoringResumeIds, setScoringResumeIds] = useState<Set<number>>(new Set());
-  const [showDropdown, setShowDropdown] = useState(false);
-  const comboboxRef = useRef<HTMLDivElement>(null);
+  const [atsScore, setAtsScore] = useState<AtsScore | null>(null);
+  const [linkedInScore, setLinkedInScore] = useState<LinkedInScore | null>(null);
+  const [isScoringAts, setIsScoringAts] = useState(false);
+  const [isScoringLinkedIn, setIsScoringLinkedIn] = useState(false);
 
+  // Derived values
+  const { primaryResume, primaryLinkedIn, otherCount } = useMemo(() => {
+    const resumeRecords = resumes.filter(
+      (r) => !r.filename.startsWith('https://www.linkedin.com')
+    );
+    const linkedInRecords = resumes.filter(
+      (r) => r.filename.startsWith('https://www.linkedin.com')
+    );
+    return {
+      primaryResume: resumeRecords[0] ?? null,
+      primaryLinkedIn: linkedInRecords[0] ?? null,
+      otherCount: Math.max(0, resumeRecords.length - 1) + Math.max(0, linkedInRecords.length - 1),
+    };
+  }, [resumes]);
+
+  // Merge identity from both sources, preferring LinkedIn
+  const { displayName, currentRole, email, location } = useMemo(() => {
+    let linkedInStructured: StructuredResume | null = null;
+    let resumeStructured: StructuredResume | null = null;
+
+    if (primaryLinkedIn) {
+      try { linkedInStructured = JSON.parse(primaryLinkedIn.structured) as StructuredResume; } catch { /* */ }
+    }
+    if (primaryResume) {
+      try { resumeStructured = JSON.parse(primaryResume.structured) as StructuredResume; } catch { /* */ }
+    }
+
+    const primary = linkedInStructured ?? resumeStructured;
+    const fallback = resumeStructured ?? linkedInStructured;
+
+    const name = primary?.contactInfo.name || fallback?.contactInfo.name || 'Meu Perfil';
+    const role = primary ? getCurrentRole(primary) : fallback ? getCurrentRole(fallback) : null;
+    const emailVal = primary?.contactInfo.email || fallback?.contactInfo.email || null;
+    const loc = primary?.contactInfo.location || fallback?.contactInfo.location || null;
+
+    return { displayName: name, currentRole: role, email: emailVal, location: loc };
+  }, [primaryLinkedIn, primaryResume]);
+
+  const hasTargetRole = targetRole.trim().length > 0;
+
+  // Load resumes + job titles on mount
   const loadResumes = useCallback(async () => {
     setLoading(true);
     try {
-      const records = await api.getResumes();
+      const [records, titles] = await Promise.all([
+        api.getResumes(),
+        api.getDistinctJobTitles(),
+      ]);
       setResumes(records);
+      setJobTitles(titles);
     } catch {
       // silently handle
     } finally {
@@ -54,36 +93,15 @@ export function ResumesPage() {
     }
   }, [api]);
 
-  const loadJobTitles = useCallback(async () => {
-    try {
-      const titles = await api.getDistinctJobTitles();
-      setJobTitles(titles);
-    } catch {
-      // silently handle
-    }
-  }, [api]);
-
   useEffect(() => {
     loadResumes();
-    loadJobTitles();
-  }, [loadResumes, loadJobTitles]);
+  }, [loadResumes]);
 
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (comboboxRef.current && !comboboxRef.current.contains(e.target as Node)) {
-        setShowDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
-  // Load cached ATS scores and LinkedIn scores when targetRole changes
+  // Load cached scores when targetRole changes
   useEffect(() => {
     if (!targetRole.trim()) {
-      setAtsScores(new Map());
-      setLinkedInScores(new Map());
+      setAtsScore(null);
+      setLinkedInScore(null);
       return;
     }
     let cancelled = false;
@@ -94,77 +112,19 @@ export function ResumesPage() {
           api.getLinkedInScores(targetRole.trim()),
         ]);
         if (!cancelled) {
-          const atsMap = new Map<number, AtsScore>();
-          for (const s of ats) atsMap.set(s.resumeId, s);
-          setAtsScores(atsMap);
-          const liMap = new Map<number, LinkedInScore>();
-          for (const s of linkedin) liMap.set(s.resumeId, s);
-          setLinkedInScores(liMap);
+          setAtsScore(
+            primaryResume ? (ats.find((s) => s.resumeId === primaryResume.id) ?? null) : null
+          );
+          setLinkedInScore(
+            primaryLinkedIn ? (linkedin.find((s) => s.resumeId === primaryLinkedIn.id) ?? null) : null
+          );
         }
       } catch {
         // silently handle
       }
     })();
     return () => { cancelled = true; };
-  }, [targetRole, api]);
-
-  const handleComputeScore = useCallback(
-    async (resumeId: number) => {
-      const role = targetRole.trim();
-      if (!role) return;
-      setScoringResumeIds((prev) => new Set(prev).add(resumeId));
-      try {
-        const score = await api.computeAtsScore(resumeId, role);
-        setAtsScores((prev) => {
-          const next = new Map(prev);
-          next.set(resumeId, score);
-          return next;
-        });
-        // Refresh job titles in case this is a new role
-        loadJobTitles();
-      } catch {
-        // silently handle
-      } finally {
-        setScoringResumeIds((prev) => {
-          const next = new Set(prev);
-          next.delete(resumeId);
-          return next;
-        });
-      }
-    },
-    [api, targetRole, loadJobTitles]
-  );
-
-  const handleComputeLinkedInScore = useCallback(
-    async (resumeId: number) => {
-      const role = targetRole.trim();
-      if (!role) return;
-      setScoringResumeIds((prev) => new Set(prev).add(resumeId));
-      try {
-        const score = await api.computeLinkedInScore(resumeId, role);
-        setLinkedInScores((prev) => {
-          const next = new Map(prev);
-          next.set(resumeId, score);
-          return next;
-        });
-        loadJobTitles();
-      } catch {
-        // silently handle
-      } finally {
-        setScoringResumeIds((prev) => {
-          const next = new Set(prev);
-          next.delete(resumeId);
-          return next;
-        });
-      }
-    },
-    [api, targetRole, loadJobTitles]
-  );
-
-  const handleSelectRole = useCallback((role: string) => {
-    setTargetRole(role);
-    setShowDropdown(false);
-  }, []);
+  }, [targetRole, api, primaryResume, primaryLinkedIn]);
 
   const handleUpload = useCallback(async () => {
     setUploading(true);
@@ -186,381 +146,144 @@ export function ResumesPage() {
     }
   }, [api, loadResumes]);
 
-  const handleImportLinkedin = useCallback(async () => {
-    const url = linkedinUrl.trim();
-    if (!url) return;
-    setImportingLinkedin(true);
+  const handleImportLinkedin = useCallback(async (url: string) => {
     setError(null);
     try {
       await api.importLinkedInProfile(url);
-      setLinkedinUrl('');
       await loadResumes();
     } catch (err: any) {
       setError(err?.message || 'Erro ao importar perfil do LinkedIn');
+    }
+  }, [api, loadResumes]);
+
+  const handleComputeAts = useCallback(async () => {
+    const role = targetRole.trim();
+    if (!role || !primaryResume) return;
+    setIsScoringAts(true);
+    try {
+      const score = await api.computeAtsScore(primaryResume.id, role);
+      setAtsScore(score);
+      const titles = await api.getDistinctJobTitles();
+      setJobTitles(titles);
+    } catch {
+      // silently handle
     } finally {
-      setImportingLinkedin(false);
+      setIsScoringAts(false);
     }
-  }, [api, linkedinUrl, loadResumes]);
+  }, [api, primaryResume, targetRole]);
 
-  const handleDelete = useCallback(
-    async (id: number) => {
-      setDeletingId(id);
-      try {
-        await api.deleteResume(id);
-        setResumes((prev) => prev.filter((r) => r.id !== id));
-        setAtsScores((prev) => {
-          const next = new Map(prev);
-          next.delete(id);
-          return next;
-        });
-        setLinkedInScores((prev) => {
-          const next = new Map(prev);
-          next.delete(id);
-          return next;
-        });
-      } catch {
-        // silently handle
-      } finally {
-        setDeletingId(null);
-      }
-    },
-    [api]
-  );
+  const handleComputeLinkedIn = useCallback(async () => {
+    const role = targetRole.trim();
+    if (!role || !primaryLinkedIn) return;
+    setIsScoringLinkedIn(true);
+    try {
+      const score = await api.computeLinkedInScore(primaryLinkedIn.id, role);
+      setLinkedInScore(score);
+      const titles = await api.getDistinctJobTitles();
+      setJobTitles(titles);
+    } catch {
+      // silently handle
+    } finally {
+      setIsScoringLinkedIn(false);
+    }
+  }, [api, primaryLinkedIn, targetRole]);
 
-  const handleOptimize = useCallback(
-    (record: ResumeRecord) => {
-      const structured = JSON.parse(record.structured) as StructuredResume;
-      setResumeText(record.rawText);
-      setResumeFilename(record.filename);
-      setCurrentResume(structured);
-      setSelectedResumeId(record.id);
+  const handleOptimize = useCallback(() => {
+    if (!primaryResume) return;
+    try {
+      const s = JSON.parse(primaryResume.structured) as StructuredResume;
+      setResumeText(primaryResume.rawText);
+      setResumeFilename(primaryResume.filename);
+      setCurrentResume(s);
+      setSelectedResumeId(primaryResume.id);
       navigate('/optimize');
-    },
-    [navigate, setResumeText, setResumeFilename, setCurrentResume, setSelectedResumeId]
-  );
-
-  const formatDate = (dateStr: string) => {
-    try {
-      return new Date(dateStr).toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
     } catch {
-      return dateStr;
+      // silently handle
     }
-  };
+  }, [primaryResume, navigate, setResumeText, setResumeFilename, setCurrentResume, setSelectedResumeId]);
 
-  const parseStructured = (json: string): StructuredResume | null => {
-    try {
-      return JSON.parse(json) as StructuredResume;
-    } catch {
-      return null;
-    }
-  };
+  const handleViewResume = useCallback((id: number) => {
+    navigate(`/resumes/${id}`);
+  }, [navigate]);
 
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-emerald-400';
-    if (score >= 50) return 'text-yellow-400';
-    return 'text-red-400';
-  };
-
-  const getScoreBg = (score: number) => {
-    if (score >= 80) return 'bg-emerald-500/15 border-emerald-500/30';
-    if (score >= 50) return 'bg-yellow-500/15 border-yellow-500/30';
-    return 'bg-red-500/15 border-red-500/30';
-  };
-
-  const isLinkedInProfile = (filename: string) =>
-    filename.startsWith('https://www.linkedin.com/in/');
-
-  const filteredTitles = jobTitles.filter((t) =>
-    t.toLowerCase().includes(targetRole.toLowerCase())
-  );
-
-  return (
-    <div className="max-w-5xl mx-auto space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-zinc-100 flex items-center gap-3">
-            <FileText className="w-8 h-8 text-emerald-400" />
-            Curriculos
-          </h1>
-          <p className="mt-2 text-zinc-400">
-            Gerencie seus curriculos salvos e reutilize-os nas otimizacoes.
-          </p>
-        </div>
-        <button
-          onClick={handleUpload}
-          disabled={uploading}
-          className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg px-4 py-2.5 font-medium transition-colors flex items-center gap-2"
-        >
-          {uploading ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Importando...
-            </>
-          ) : (
-            <>
-              <Upload className="w-4 h-4" />
-              Importar Curriculo
-            </>
-          )}
-        </button>
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
       </div>
+    );
+  }
 
-      {/* LinkedIn Import */}
-      <div className="flex gap-2 max-w-md">
-        <input
-          type="text"
-          value={linkedinUrl}
-          onChange={(e) => setLinkedinUrl(e.target.value)}
-          placeholder="https://www.linkedin.com/in/..."
-          className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500 transition-colors"
-        />
-        <button
-          onClick={handleImportLinkedin}
-          disabled={importingLinkedin || !linkedinUrl.trim().startsWith('https://www.linkedin.com/in/')}
-          className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed text-zinc-200 rounded-lg px-3 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 border border-zinc-700 shrink-0"
-        >
-          {importingLinkedin ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Importando...
-            </>
-          ) : (
-            <>
-              <Link className="w-4 h-4" />
-              Importar LinkedIn
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* Target Role Combobox */}
-      <div ref={comboboxRef} className="relative max-w-md">
-        <label className="block text-sm font-medium text-zinc-400 mb-1.5">
-          <Target className="w-3.5 h-3.5 inline-block mr-1.5 -mt-0.5" />
-          Cargo alvo
-        </label>
-        <div className="relative">
-          <input
-            type="text"
-            value={targetRole}
-            onChange={(e) => {
-              setTargetRole(e.target.value);
-              setShowDropdown(true);
-            }}
-            onFocus={() => setShowDropdown(true)}
-            placeholder="Ex: Software Engineer, Product Manager..."
-            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500 transition-colors pr-8"
-          />
-          {jobTitles.length > 0 && (
-            <button
-              onClick={() => setShowDropdown(!showDropdown)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
-            >
-              <ChevronDown className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-        {showDropdown && filteredTitles.length > 0 && (
-          <div className="absolute z-10 mt-1 w-full bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-            {filteredTitles.map((title) => (
-              <button
-                key={title}
-                onClick={() => handleSelectRole(title)}
-                className="w-full text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors first:rounded-t-lg last:rounded-b-lg"
-              >
-                {title}
-              </button>
-            ))}
+  if (resumes.length === 0) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        {error && (
+          <div className="bg-red-950/50 border border-red-900 rounded-lg px-4 py-3 text-red-300 text-sm mb-6">
+            {error}
           </div>
         )}
+        <EmptyProfileState
+          uploading={uploading}
+          onUpload={handleUpload}
+          onImportLinkedin={handleImportLinkedin}
+        />
       </div>
+    );
+  }
 
+  return (
+    <div className="max-w-5xl mx-auto space-y-6">
       {error && (
         <div className="bg-red-950/50 border border-red-900 rounded-lg px-4 py-3 text-red-300 text-sm">
           {error}
         </div>
       )}
 
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : resumes.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <Inbox className="w-16 h-16 text-zinc-700 mb-4" />
-          <p className="text-lg text-zinc-400">Nenhum curriculo salvo</p>
-          <p className="text-sm text-zinc-500 mt-1">
-            Importe seu primeiro curriculo clicando no botao acima.
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {resumes.map((record) => {
-            const structured = parseStructured(record.structured);
-            const isLinkedin = isLinkedInProfile(record.filename);
-            const atsScore = atsScores.get(record.id);
-            const linkedInScore = linkedInScores.get(record.id);
-            const isScoring = scoringResumeIds.has(record.id);
-            const hasRole = targetRole.trim().length > 0;
+      {/* Profile Header */}
+      <ProfileHeader
+        displayName={displayName}
+        currentRole={currentRole}
+        email={email}
+        location={location}
+        primaryResume={primaryResume}
+        primaryLinkedIn={primaryLinkedIn}
+        targetRole={targetRole}
+        onTargetRoleChange={setTargetRole}
+        jobTitles={jobTitles}
+      />
 
-            return (
-              <div
-                key={record.id}
-                className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-3"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="min-w-0 flex-1">
-                    <h3 className="text-base font-semibold text-zinc-100 truncate">
-                      {structured?.contactInfo.name || record.filename}
-                    </h3>
-                    <p className="text-sm text-zinc-500 truncate">
-                      {record.filename}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handleDelete(record.id)}
-                    disabled={deletingId === record.id}
-                    className="text-zinc-600 hover:text-red-400 transition-colors shrink-0 ml-2"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
+      {/* Score Panel */}
+      <ScorePanel
+        atsScore={atsScore}
+        linkedInScore={linkedInScore}
+        isScoringAts={isScoringAts}
+        isScoringLinkedIn={isScoringLinkedIn}
+        hasTargetRole={hasTargetRole}
+        onComputeAts={primaryResume ? handleComputeAts : noop}
+        onComputeLinkedIn={primaryLinkedIn ? handleComputeLinkedIn : noop}
+      />
 
-                {structured && structured.skills.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {structured.skills.slice(0, 6).map((skill) => (
-                      <span
-                        key={skill}
-                        className="text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md"
-                      >
-                        {skill}
-                      </span>
-                    ))}
-                    {structured.skills.length > 6 && (
-                      <span className="text-xs text-zinc-600">
-                        +{structured.skills.length - 6}
-                      </span>
-                    )}
-                  </div>
-                )}
+      {/* Data Sources */}
+      <DataSourcesCard
+        primaryResume={primaryResume}
+        primaryLinkedIn={primaryLinkedIn}
+        otherCount={otherCount}
+        uploading={uploading}
+        onUpload={handleUpload}
+        onImportLinkedin={handleImportLinkedin}
+        onViewResume={handleViewResume}
+      />
 
-                {/* Score Section — LinkedIn or ATS depending on source */}
-                {hasRole && (
-                  <div className="pt-1">
-                    {isScoring ? (
-                      <div className="flex items-center gap-2 text-sm text-zinc-400">
-                        <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
-                        Avaliando para &ldquo;{targetRole}&rdquo;...
-                      </div>
-                    ) : isLinkedin ? (
-                      linkedInScore ? (
-                        <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/50 p-3 space-y-3">
-                          <div className="flex gap-3">
-                            <div className={`flex-1 rounded-lg border p-2.5 ${getScoreBg(linkedInScore.visibilityScore)}`}>
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <Target className="w-3 h-3 text-zinc-400" />
-                                <span className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Visibilidade</span>
-                              </div>
-                              <span className={`text-2xl font-bold ${getScoreColor(linkedInScore.visibilityScore)}`}>
-                                {linkedInScore.visibilityScore}
-                              </span>
-                            </div>
-                            <div className={`flex-1 rounded-lg border p-2.5 ${getScoreBg(linkedInScore.impactScore)}`}>
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <Star className="w-3 h-3 text-zinc-400" />
-                                <span className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Impacto</span>
-                              </div>
-                              <span className={`text-2xl font-bold ${getScoreColor(linkedInScore.impactScore)}`}>
-                                {linkedInScore.impactScore}
-                              </span>
-                            </div>
-                          </div>
-                          {linkedInScore.tips.length > 0 && (
-                            <ul className="space-y-1">
-                              {linkedInScore.tips.map((tip, i) => (
-                                <li key={i} className="flex items-start gap-1.5 text-xs text-zinc-300">
-                                  <Lightbulb className="w-3 h-3 text-yellow-500 shrink-0 mt-0.5" />
-                                  <span>{tip}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => handleComputeLinkedInScore(record.id)}
-                          className="bg-zinc-800 hover:bg-zinc-750 text-zinc-300 hover:text-zinc-100 rounded-lg px-3 py-1.5 text-sm transition-colors flex items-center gap-1.5 border border-zinc-700 hover:border-zinc-600"
-                        >
-                          <Link className="w-3.5 h-3.5" />
-                          Avaliar LinkedIn
-                        </button>
-                      )
-                    ) : atsScore ? (
-                      <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/50 p-3 space-y-3">
-                        <div className="flex gap-3">
-                          <div className={`flex-1 rounded-lg border p-2.5 ${getScoreBg(atsScore.atsScore)}`}>
-                            <div className="flex items-center gap-1.5 mb-1">
-                              <Target className="w-3 h-3 text-zinc-400" />
-                              <span className="text-xs font-medium text-zinc-400 uppercase tracking-wide">ATS</span>
-                            </div>
-                            <span className={`text-2xl font-bold ${getScoreColor(atsScore.atsScore)}`}>
-                              {atsScore.atsScore}
-                            </span>
-                          </div>
-                          <div className={`flex-1 rounded-lg border p-2.5 ${getScoreBg(atsScore.qualityScore)}`}>
-                            <div className="flex items-center gap-1.5 mb-1">
-                              <Star className="w-3 h-3 text-zinc-400" />
-                              <span className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Qualidade</span>
-                            </div>
-                            <span className={`text-2xl font-bold ${getScoreColor(atsScore.qualityScore)}`}>
-                              {atsScore.qualityScore}
-                            </span>
-                          </div>
-                        </div>
-                        {atsScore.tips.length > 0 && (
-                          <ul className="space-y-1">
-                            {atsScore.tips.slice(0, 5).map((tip, i) => (
-                              <li key={i} className="flex items-start gap-1.5 text-xs text-zinc-300">
-                                <Lightbulb className="w-3 h-3 text-yellow-500 shrink-0 mt-0.5" />
-                                <span>{tip}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => handleComputeScore(record.id)}
-                        className="bg-zinc-800 hover:bg-zinc-750 text-zinc-300 hover:text-zinc-100 rounded-lg px-3 py-1.5 text-sm transition-colors flex items-center gap-1.5 border border-zinc-700 hover:border-zinc-600"
-                      >
-                        <Target className="w-3.5 h-3.5" />
-                        Avaliar
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between pt-1">
-                  <span className="text-xs text-zinc-600">
-                    {formatDate(record.createdAt)}
-                  </span>
-                  <button
-                    onClick={() => handleOptimize(record)}
-                    className="bg-emerald-600/15 hover:bg-emerald-600/25 text-emerald-400 rounded-lg px-3 py-1.5 text-sm transition-colors flex items-center gap-1.5"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Otimizar
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+      {/* Quick action: Optimize */}
+      {primaryResume && (
+        <div className="flex justify-center pt-2">
+          <button
+            onClick={handleOptimize}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-8 py-3 font-medium transition-colors flex items-center gap-2 text-sm shadow-lg shadow-emerald-900/20"
+          >
+            <Sparkles className="w-5 h-5" />
+            Otimizar Curriculo
+          </button>
         </div>
       )}
     </div>
