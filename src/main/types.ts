@@ -1,0 +1,16 @@
+export type {
+  ContactInfo,
+  Experience,
+  Education,
+  StructuredResume,
+  JobRequirements,
+  KeywordAnalysis,
+  SectionScore,
+  OptimizationResult,
+  ResumeRecord,
+  JobRecord,
+  OptimizationRecord,
+  AppSettings,
+  StreamChunk,
+  ElectronAPI,
+} from '../renderer/types';
