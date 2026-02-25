@@ -50,5 +50,28 @@ export function initDatabase(): void {
       result TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    DROP TABLE IF EXISTS ats_scores;
+    CREATE TABLE IF NOT EXISTS ats_scores (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      resume_id INTEGER NOT NULL REFERENCES resumes(id) ON DELETE CASCADE,
+      target_role TEXT NOT NULL,
+      ats_score INTEGER NOT NULL,
+      quality_score INTEGER NOT NULL,
+      tips TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(resume_id, target_role)
+    );
+
+    CREATE TABLE IF NOT EXISTS linkedin_scores (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      resume_id INTEGER NOT NULL REFERENCES resumes(id) ON DELETE CASCADE,
+      target_role TEXT NOT NULL,
+      visibility_score INTEGER NOT NULL,
+      impact_score INTEGER NOT NULL,
+      tips TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(resume_id, target_role)
+    );
   `);
 }

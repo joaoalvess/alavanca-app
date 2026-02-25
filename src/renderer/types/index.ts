@@ -97,6 +97,26 @@ export interface OptimizationRecord {
   overallScore?: number;
 }
 
+export interface AtsScore {
+  id: number;
+  resumeId: number;
+  targetRole: string;
+  atsScore: number;
+  qualityScore: number;
+  tips: string[];
+  createdAt: string;
+}
+
+export interface LinkedInScore {
+  id: number;
+  resumeId: number;
+  targetRole: string;
+  visibilityScore: number;
+  impactScore: number;
+  tips: string[];
+  createdAt: string;
+}
+
 export interface AppSettings {
   activeProvider: 'codex';
 }
@@ -148,8 +168,22 @@ export interface ElectronAPI {
   exportPdf: (resume: StructuredResume) => Promise<string>;
   exportDocx: (resume: StructuredResume) => Promise<string>;
 
+  // ATS Scores
+  getDistinctJobTitles: () => Promise<string[]>;
+  getAtsScores: (targetRole: string) => Promise<AtsScore[]>;
+  computeAtsScore: (resumeId: number, targetRole: string) => Promise<AtsScore>;
+  deleteAtsScores: (resumeId: number) => Promise<void>;
+
+  // LinkedIn Scores
+  computeLinkedInScore: (resumeId: number, targetRole: string) => Promise<LinkedInScore>;
+  getLinkedInScores: (targetRole: string) => Promise<LinkedInScore[]>;
+  deleteLinkedInScores: (resumeId: number) => Promise<void>;
+
   // Scraping
   scrapeJobUrl: (url: string) => Promise<string>;
+
+  // LinkedIn
+  importLinkedInProfile: (url: string) => Promise<ResumeRecord>;
 }
 
 declare global {
