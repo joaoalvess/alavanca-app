@@ -55,6 +55,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('history:save-job', title, company, description, requirements),
   saveOptimization: (resumeId: number, jobId: number, result: unknown) =>
     ipcRenderer.invoke('history:save-optimization', resumeId, jobId, result),
+  getResumes: () =>
+    ipcRenderer.invoke('history:get-resumes'),
+  getResume: (id: number) =>
+    ipcRenderer.invoke('history:get-resume', id),
+  deleteResume: (id: number) =>
+    ipcRenderer.invoke('history:delete-resume', id),
   getOptimizations: () =>
     ipcRenderer.invoke('history:get-optimizations'),
   getOptimization: (id: number) =>

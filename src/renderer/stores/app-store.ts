@@ -16,6 +16,7 @@ interface AppState {
   isOptimizing: boolean;
   streamContent: string;
   settings: AppSettings;
+  selectedResumeId: number | null;
 
   setCurrentResume: (resume: StructuredResume | null) => void;
   setCurrentJob: (job: JobRequirements | null) => void;
@@ -24,6 +25,7 @@ interface AppState {
   setResumeFilename: (filename: string) => void;
   setJobDescription: (description: string) => void;
   setIsOptimizing: (optimizing: boolean) => void;
+  setSelectedResumeId: (id: number | null) => void;
   appendStreamContent: (content: string) => void;
   clearStreamContent: () => void;
   setSettings: (settings: AppSettings) => void;
@@ -44,6 +46,7 @@ const initialState = {
   isOptimizing: false,
   streamContent: '',
   settings: defaultSettings,
+  selectedResumeId: null,
 };
 
 export const useAppStore = create<AppState>()((set) => ({
@@ -57,6 +60,7 @@ export const useAppStore = create<AppState>()((set) => ({
   setResumeFilename: (filename) => set({ resumeFilename: filename }),
   setJobDescription: (description) => set({ jobDescription: description }),
   setIsOptimizing: (optimizing) => set({ isOptimizing: optimizing }),
+  setSelectedResumeId: (id) => set({ selectedResumeId: id }),
   appendStreamContent: (content) =>
     set((state) => ({ streamContent: state.streamContent + content })),
   clearStreamContent: () => set({ streamContent: '' }),

@@ -4,7 +4,7 @@ import { getDb } from '../db/database';
 import { exportResumeToPdf } from '../services/export/pdf-exporter';
 import { exportResumeToDocx } from '../services/export/docx-exporter';
 import * as cheerio from 'cheerio';
-import type { StructuredResume, JobRequirements, OptimizationResult, OptimizationRecord } from '../../renderer/types';
+import type { StructuredResume, JobRequirements, OptimizationResult, OptimizationRecord, ResumeRecord } from '../../renderer/types';
 
 export function registerHistoryIpc(): void {
   ipcMain.handle(
@@ -39,6 +39,41 @@ export function registerHistoryIpc(): void {
       return dbResult.lastInsertRowid as number;
     }
   );
+
+  ipcMain.handle('history:get-resumes', (): ResumeRecord[] => {
+    const db = getDb();
+    const rows = db
+      .prepare('SELECT id, filename, raw_text, structured, created_at FROM resumes ORDER BY created_at DESC')
+      .all() as any[];
+    return rows.map((row) => ({
+      id: row.id,
+      filename: row.filename,
+      rawText: row.raw_text,
+      structured: row.structured,
+      createdAt: row.created_at,
+    }));
+  });
+
+  ipcMain.handle('history:get-resume', (_event, id: number): ResumeRecord | null => {
+    const db = getDb();
+    const row = db
+      .prepare('SELECT id, filename, raw_text, structured, created_at FROM resumes WHERE id = ?')
+      .get(id) as any | undefined;
+    if (!row) return null;
+    return {
+      id: row.id,
+      filename: row.filename,
+      rawText: row.raw_text,
+      structured: row.structured,
+      createdAt: row.created_at,
+    };
+  });
+
+  ipcMain.handle('history:delete-resume', (_event, id: number): void => {
+    const db = getDb();
+    db.prepare('DELETE FROM optimizations WHERE resume_id = ?').run(id);
+    db.prepare('DELETE FROM resumes WHERE id = ?').run(id);
+  });
 
   ipcMain.handle('history:get-optimizations', (): OptimizationRecord[] => {
     const db = getDb();

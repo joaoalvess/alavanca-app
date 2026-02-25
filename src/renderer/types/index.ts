@@ -137,6 +137,9 @@ export interface ElectronAPI {
   saveResume: (filename: string, rawText: string, structured: StructuredResume) => Promise<number>;
   saveJob: (title: string, company: string, description: string, requirements: JobRequirements) => Promise<number>;
   saveOptimization: (resumeId: number, jobId: number, result: OptimizationResult) => Promise<number>;
+  getResumes: () => Promise<ResumeRecord[]>;
+  getResume: (id: number) => Promise<ResumeRecord | null>;
+  deleteResume: (id: number) => Promise<void>;
   getOptimizations: () => Promise<OptimizationRecord[]>;
   getOptimization: (id: number) => Promise<OptimizationRecord | null>;
   deleteOptimization: (id: number) => Promise<void>;

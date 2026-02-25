@@ -14,7 +14,7 @@ import {
 import { useElectronAPI } from '../hooks/useElectronAPI';
 import { useAppStore } from '../stores/app-store';
 import { cn } from '../lib/utils';
-import type { StructuredResume, JobRequirements } from '../types';
+import type { StructuredResume, ResumeRecord } from '../types';
 
 type OptimizeStep = 'idle' | 'structuring' | 'analyzing' | 'optimizing' | 'done';
 
@@ -28,6 +28,7 @@ export function OptimizePage() {
     currentJob,
     currentOptimization,
     isOptimizing,
+    selectedResumeId,
     setResumeText,
     setResumeFilename,
     setJobDescription,
@@ -35,6 +36,7 @@ export function OptimizePage() {
     setCurrentJob,
     setCurrentOptimization,
     setIsOptimizing,
+    setSelectedResumeId,
   } = useAppStore();
 
   const [step, setStep] = useState<OptimizeStep>('idle');
@@ -43,6 +45,11 @@ export function OptimizePage() {
   const [isScraping, setIsScraping] = useState(false);
   const [saved, setSaved] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [savedResumes, setSavedResumes] = useState<ResumeRecord[]>([]);
+
+  useEffect(() => {
+    api.getResumes().then(setSavedResumes).catch(() => { /* ignore */ });
+  }, [api]);
 
   const handleSelectFile = useCallback(async () => {
     try {
@@ -51,11 +58,25 @@ export function OptimizePage() {
       const result = await api.parseResume(filePath);
       setResumeText(result.text);
       setResumeFilename(result.filename);
+      setSelectedResumeId(null);
+      setCurrentResume(null);
       setError(null);
     } catch (err: any) {
       setError(err?.message || 'Erro ao carregar arquivo');
     }
-  }, [api, setResumeText, setResumeFilename]);
+  }, [api, setResumeText, setResumeFilename, setSelectedResumeId, setCurrentResume]);
+
+  const handleSelectSavedResume = useCallback(
+    (record: ResumeRecord) => {
+      const structured = JSON.parse(record.structured) as StructuredResume;
+      setResumeText(record.rawText);
+      setResumeFilename(record.filename);
+      setCurrentResume(structured);
+      setSelectedResumeId(record.id);
+      setError(null);
+    },
+    [setResumeText, setResumeFilename, setCurrentResume, setSelectedResumeId]
+  );
 
   const handleScrapeUrl = useCallback(async () => {
     if (!scrapeUrl.trim()) return;
@@ -79,10 +100,15 @@ export function OptimizePage() {
     setSaved(false);
 
     try {
-      // Step 1: Structure resume
-      setStep('structuring');
-      const structured = await api.structureResume(resumeText);
-      setCurrentResume(structured);
+      // Step 1: Structure resume (skip if already structured from saved resume)
+      let structured: StructuredResume;
+      if (selectedResumeId && currentResume) {
+        structured = currentResume;
+      } else {
+        setStep('structuring');
+        structured = await api.structureResume(resumeText);
+        setCurrentResume(structured);
+      }
 
       // Step 2: Extract job requirements
       setStep('analyzing');
@@ -197,30 +223,70 @@ export function OptimizePage() {
           </h2>
 
           {!resumeText ? (
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOver(true);
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragOver(false);
-                // Drag & drop handled by file picker in Electron
-              }}
-              className={cn(
-                'border-2 border-dashed rounded-xl p-10 text-center transition-colors cursor-pointer',
-                dragOver
-                  ? 'border-emerald-500 bg-emerald-600/5'
-                  : 'border-zinc-700 hover:border-zinc-600'
+            <div className="space-y-4">
+              {/* Saved resumes selector */}
+              {savedResumes.length > 0 && (
+                <div>
+                  <label className="text-sm text-zinc-400 mb-2 block">
+                    Selecionar curriculo salvo
+                  </label>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {savedResumes.map((r) => {
+                      let name = r.filename;
+                      try {
+                        const parsed = JSON.parse(r.structured);
+                        if (parsed.contactInfo?.name) name = parsed.contactInfo.name;
+                      } catch { /* ignore */ }
+                      return (
+                        <button
+                          key={r.id}
+                          onClick={() => handleSelectSavedResume(r)}
+                          className="w-full flex items-center gap-3 bg-zinc-800 hover:bg-zinc-700 rounded-lg px-4 py-3 text-left transition-colors"
+                        >
+                          <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm text-zinc-200 truncate">{name}</p>
+                            <p className="text-xs text-zinc-500 truncate">{r.filename}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="relative my-3">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-zinc-800" />
+                    </div>
+                    <div className="relative flex justify-center text-xs">
+                      <span className="bg-zinc-900 px-2 text-zinc-500">ou</span>
+                    </div>
+                  </div>
+                </div>
               )}
-              onClick={handleSelectFile}
-            >
-              <Upload className="w-10 h-10 text-zinc-500 mx-auto mb-3" />
-              <p className="text-zinc-300 font-medium">
-                Clique para selecionar um arquivo
-              </p>
-              <p className="text-sm text-zinc-500 mt-1">PDF ou DOCX</p>
+
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                }}
+                className={cn(
+                  'border-2 border-dashed rounded-xl p-10 text-center transition-colors cursor-pointer',
+                  dragOver
+                    ? 'border-emerald-500 bg-emerald-600/5'
+                    : 'border-zinc-700 hover:border-zinc-600'
+                )}
+                onClick={handleSelectFile}
+              >
+                <Upload className="w-10 h-10 text-zinc-500 mx-auto mb-3" />
+                <p className="text-zinc-300 font-medium">
+                  Clique para selecionar um arquivo
+                </p>
+                <p className="text-sm text-zinc-500 mt-1">PDF ou DOCX</p>
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
@@ -235,6 +301,8 @@ export function OptimizePage() {
                   onClick={() => {
                     setResumeText('');
                     setResumeFilename('');
+                    setSelectedResumeId(null);
+                    setCurrentResume(null);
                   }}
                   className="text-zinc-500 hover:text-zinc-300 transition-colors"
                 >

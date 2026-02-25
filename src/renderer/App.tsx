@@ -1,6 +1,7 @@
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/ui/Layout';
 import { DashboardPage } from './pages/DashboardPage';
+import { ResumesPage } from './pages/ResumesPage';
 import { OptimizePage } from './pages/OptimizePage';
 import { HistoryPage } from './pages/HistoryPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -11,6 +12,7 @@ export default function App() {
       <Layout>
         <Routes>
           <Route path="/" element={<DashboardPage />} />
+          <Route path="/resumes" element={<ResumesPage />} />
           <Route path="/optimize" element={<OptimizePage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/settings" element={<SettingsPage />} />
