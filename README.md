@@ -102,3 +102,7 @@ src/
 ## 📄 Licença
 
 Este projeto está licenciado sob a [MIT License](LICENSE).
+
+## Developer
+
+Developer: João Alves
