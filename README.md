@@ -1,8 +1,8 @@
 <div align="center">
 
-# 🚀 Alavanca
+# Alavanca
 
-**Otimize seu currículo para cada vaga com inteligência artificial**
+**Optimize your resume for every job posting with AI**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Electron](https://img.shields.io/badge/Electron-40-47848F?logo=electron&logoColor=white)](https://www.electronjs.org/)
@@ -10,33 +10,33 @@
 
 </div>
 
-## 💡 Sobre
+## About
 
-Alavanca é um app desktop que usa IA para otimizar currículos para vagas específicas. Faça upload do seu currículo (PDF/DOCX), cole a descrição da vaga e receba um currículo otimizado com scoring e análise de keywords.
+Alavanca is a desktop app that uses AI to tailor your resume for specific job postings. Upload your resume (PDF/DOCX), paste the job description, and get back an optimized resume with scoring and keyword analysis.
 
-## ✨ Features
+## Features
 
-- 📄 **Upload de PDF/DOCX** — importe seu currículo em qualquer formato
-- 🔗 **Scraping de vagas por URL** — extraia descrições de vagas automaticamente
-- 🤖 **Pipeline de 3 etapas com IA** — estruturação → análise → otimização
-- 🎯 **Scoring e análise de keywords** — saiba exatamente onde seu currículo pode melhorar
-- 📥 **Exportação PDF/DOCX** — baixe o currículo otimizado pronto para enviar
-- 🕓 **Histórico de otimizações** — acompanhe todas as versões geradas
-- ⚡ **Suporte a Claude CLI e Codex CLI** — escolha seu provedor de IA preferido
+- **PDF/DOCX Upload** — import your resume in any format
+- **Job URL Scraping** — automatically extract job descriptions from URLs
+- **3-Step AI Pipeline** — structuring → analysis → optimization
+- **Scoring & Keyword Analysis** — know exactly where your resume can improve
+- **PDF/DOCX Export** — download the optimized resume ready to submit
+- **Optimization History** — track all generated versions
+- **Claude CLI & Codex CLI Support** — choose your preferred AI provider
 
-## 🛠️ Tech Stack
+## Tech Stack
 
-| Tecnologia | Uso |
+| Technology | Usage |
 |---|---|
-| [Electron](https://www.electronjs.org/) | App desktop multiplataforma |
-| [React](https://react.dev/) | Interface do usuário |
-| [TypeScript](https://www.typescriptlang.org/) | Tipagem estática |
-| [Tailwind CSS](https://tailwindcss.com/) | Estilização |
-| [SQLite](https://github.com/WiseLibs/better-sqlite3) | Banco de dados local |
-| [Vite](https://vitejs.dev/) | Build e HMR |
-| [Zustand](https://zustand.docs.pmnd.rs/) | Gerenciamento de estado |
+| [Electron](https://www.electronjs.org/) | Cross-platform desktop app |
+| [React](https://react.dev/) | User interface |
+| [TypeScript](https://www.typescriptlang.org/) | Static typing |
+| [Tailwind CSS](https://tailwindcss.com/) | Styling |
+| [SQLite](https://github.com/WiseLibs/better-sqlite3) | Local database |
+| [Vite](https://vitejs.dev/) | Build & HMR |
+| [Zustand](https://zustand.docs.pmnd.rs/) | State management |
 
-## 🏗️ Arquitetura
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -55,17 +55,17 @@ Alavanca é um app desktop que usa IA para otimizar currículos para vagas espec
 └─────────────────────────────────────────────┘
 ```
 
-A comunicação entre Renderer e Main acontece via IPC através do `window.electronAPI`, definido no preload bridge.
+Communication between Renderer and Main happens via IPC through `window.electronAPI`, defined in the preload bridge.
 
-## 🚀 Getting Started
+## Getting Started
 
-### Pré-requisitos
+### Prerequisites
 
 - [Node.js](https://nodejs.org/) >= 18
 - [npm](https://www.npmjs.com/)
-- [Claude CLI](https://docs.anthropic.com/en/docs/claude-cli) ou [Codex CLI](https://github.com/openai/codex) instalado
+- [Claude CLI](https://docs.anthropic.com/en/docs/claude-cli) or [Codex CLI](https://github.com/openai/codex) installed
 
-### Instalação
+### Installation
 
 ```bash
 git clone https://github.com/joaoalvess/alavanca.git
@@ -74,31 +74,31 @@ npm install
 npm start
 ```
 
-## 📋 Scripts
+## Scripts
 
-| Comando | Descrição |
+| Command | Description |
 |---|---|
-| `npm start` | Inicia o app em modo desenvolvimento com HMR |
-| `npm run lint` | Executa o ESLint |
-| `npm run package` | Empacota o app para distribuição |
-| `npm run make` | Gera instaladores nativos |
+| `npm start` | Start the app in dev mode with HMR |
+| `npm run lint` | Run ESLint |
+| `npm run package` | Package the app for distribution |
+| `npm run make` | Generate native installers |
 
-## 📁 Estrutura do Projeto
+## Project Structure
 
 ```
 src/
-├── main/                  # Processo principal (Node.js)
-│   ├── db/                # Schema e acesso ao SQLite
-│   ├── ipc/               # Handlers IPC (ai, resume, settings, history)
-│   └── services/          # Serviços (AI providers, parsing, export)
-├── preload/               # Bridge entre Main e Renderer
-└── renderer/              # Interface React
-    ├── components/        # Componentes reutilizáveis
+├── main/                  # Main process (Node.js)
+│   ├── db/                # SQLite schema & access
+│   ├── ipc/               # IPC handlers (ai, resume, settings, history)
+│   └── services/          # Services (AI providers, parsing, export)
+├── preload/               # Bridge between Main and Renderer
+└── renderer/              # React UI
+    ├── components/        # Reusable components
     ├── pages/             # Dashboard, Optimize, History, Settings
     ├── stores/            # Zustand store
-    └── types/             # Tipos TypeScript compartilhados
+    └── types/             # Shared TypeScript types
 ```
 
-## 📄 Licença
+## License
 
-Este projeto está licenciado sob a [MIT License](LICENSE).
+This project is licensed under the [MIT License](LICENSE).
